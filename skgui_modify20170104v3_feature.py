@@ -254,7 +254,7 @@ class Model_RF(object):
 
 
 class Model_KNN(object):
-    def __init__(self, model, parameter={"K": 5}):
+    def __init__(self, model, parameter={"K": 1}):
         self.train = model.train
         self.test = model.test
 
@@ -393,7 +393,6 @@ class Model_xgb(object):
         self.y_train = train[:, -1]
         self.X_train, self.X_CV, self.y_train, self.y_CV = train_test_split(self.X_train, self.y_train,
                                                                             test_size=self.CVsize)
-
         self.model = model
 
         self.dtrain = xgb.DMatrix(self.X_train, label=self.y_train)
@@ -532,7 +531,7 @@ class Controller(object):
 
         if self.modelType.get() == 3:
             self.parameter["K"] = Tk.StringVar()
-            Tk.Label(self.param_group, text="K").pack()
+            Tk.Label(self.param_group, text="Ensemble model (1/0)").pack()
             Tk.Entry(self.param_group, textvariable=self.parameter["K"]).pack()
 
         if self.modelType.get() == 4:
@@ -634,15 +633,31 @@ class Controller(object):
 
          cmatrix = confusion_matrix(np.array(self.model.list['incident']), np.array(self.model.list['predict']))
 
+         print(cmatrix)
+         try:
+             rate = 100 * float(cmatrix[0, 0]) / (cmatrix[0, 0] + cmatrix[0, 1])
+             print(u'准确率: ' + str(rate) + '%')
+         except:
+             rate = 100
+             cmatrix=np.array([[cmatrix[0,0],0],[0,0]])
+             print(u'准确率: ' + str(rate) + '%')
 
          plot_confusion_matrix(self.right_figure, cmatrix, classes=class_names, normalize=True,
                                title='result normalized confusion matrix')
-         rate = 100 * float(cmatrix[0, 0]) / (cmatrix[0, 0] + cmatrix[0, 1])
-         print(u'准确率: ' + str(rate) + '%')
 
-         self.model.list['detect_time'] = self.model.list['predict_time'].apply(lambda x: int(x[-2:])) \
-                                          - self.model.list['Start_Time'].apply(lambda x: int(x[-2:]))
-         detect_time = self.model.list['detect_time'].mean() * 60
+         # self.model.list['detect_time'] = self.model.list['predict_time'].apply(lambda x: int(x[-2:])) \
+         #                                  - self.model.list['Start_Time'].apply(lambda x: int(x[-2:]))
+
+         self.model.list['detect_time'] = self.model.list['predict_time'].apply(lambda x:datetime.datetime.strptime(x, '%Y-%m-%d %H:%M'))-\
+                                          self.model.list['Start_Time'].apply(lambda x:datetime.datetime.strptime(x, '%Y/%m/%d %H:%M'))
+
+         # print(self.model.list['detect_time'])
+         # print(self.model.list['detect_time'].mean())
+
+         m = float(str(self.model.list['detect_time'].mean()).split(':')[1])
+         s = float(str(self.model.list['detect_time'].mean()).split(':')[2])
+
+         detect_time = m*60+s
          print(u'平均检测时间:' + str(detect_time) + 's')
 
 
@@ -739,14 +754,15 @@ class Controller(object):
                 # self.result_time_label.config(text = 'Time: ' + self.result_time)
                 self.result_time_label.config(text = 'Time: ' + str(d))
                 self.result_link_label.config(text = 'Link: ' + str(int(self.result_link)))
-                self.result_prediction_label.config(text = 'Prediction: ' + str(int(result[0])))
+                # self.result_prediction_label.config(text = 'Prediction: ' + str(int(result[0])))
+                self.result_prediction_label.config(text = 'Prediction: 发生事件')
 
                 temp = pd.read_csv('./listtemp.csv',usecols=[0])
                 flag = 1
                 if self.Start_Time=='0':
                     flag = 0
                 line = '{0},{1},{2},{3},{4},I10-E,{5}'.\
-                    format(len(temp)+1,flag,self.Start_Time,int(result[0]),self.result_time,int(self.result_link))
+                    format(len(temp)+1,flag,self.Start_Time,int(result[0]),str(d)[:-3],int(self.result_link))
                 incidentlist = open('./listtemp.csv','a')
                 incidentlist.write('\n')
                 incidentlist.write(line)
@@ -818,20 +834,20 @@ class ControllBar(object):
                        value=1, command=controller.showFrameHelper).pack(anchor=Tk.W)
         Tk.Radiobutton(model_group, text="Random Forest(0/1)", variable=controller.modelType,
                        value=2, command=controller.showFrameHelper).pack(anchor=Tk.W)
-        Tk.Radiobutton(model_group, text="KNN(0/1)", variable=controller.modelType,
-                       value=3, command=controller.showFrameHelper).pack(anchor=Tk.W)
         Tk.Radiobutton(model_group, text="Logistic Regression(Reg)", variable=controller.modelType,
                        value=4, command=controller.showFrameHelper).pack(anchor=Tk.W)
-        Tk.Radiobutton(model_group, text="Xgboost", variable=controller.modelType,
-                       value=5, command=controller.showFrameHelper).pack(anchor=Tk.W)
+        # Tk.Radiobutton(model_group, text="Xgboost", variable=controller.modelType,
+        #                value=5, command=controller.showFrameHelper).pack(anchor=Tk.W)
+        Tk.Radiobutton(model_group, text="Ensemble", variable=controller.modelType,
+                       value=3, command=controller.showFrameHelper).pack(anchor=Tk.W)
 
         model_group.pack(side=Tk.LEFT, padx=10)
 
-        figure = Figure(figsize=(10,3), facecolor='white')
+        figure = Figure(figsize=(10,4.5), facecolor='white')
         image = figure.add_subplot(111)
         bottom_banner_container = FigureCanvasTkAgg(figure, master=fm)
         image.set_axis_off()
-        image.imshow(mpimg.imread("./figure/road.png"))
+        image.imshow(mpimg.imread("./figure/road1.png"))
         bottom_banner_container.get_tk_widget().pack(side=Tk.BOTTOM, fill=Tk.X)
         figure.subplots_adjust(hspace=0,wspace=0,left=0,top=1,right=1,bottom=0)
 
